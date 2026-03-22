@@ -381,6 +381,22 @@
         .expiry-bad { color: var(--red); font-weight: 700; }
         .btn-del-stock { position: absolute; top: 14px; right: 14px; background: none; border: none; cursor: pointer; color: #d0d3e0; font-size: 13px; transition: color 0.18s; }
         .btn-del-stock:hover { color: var(--red); }
+        .btn-compra {
+            width: 100%;
+            margin-top: 14px;
+            padding: 9px;
+            background: var(--green-light);
+            color: var(--green);
+            border: 1px solid rgba(0,168,107,0.25);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            transition: all 0.18s;
+        }
+        .btn-compra:hover { background: var(--green); color: white; border-color: var(--green); }
 
         /* ===== EVOLUÇÃO PREÇOS ===== */
         .price-filter { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -664,6 +680,34 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toast-msg">OK</span></div>
+
+<!-- MODAL NOVA COMPRA -->
+<div class="modal-overlay" id="modal-compra-overlay">
+    <div class="modal">
+        <div class="modal-title">Nova Compra — <span id="mc-nome-titulo" style="color:var(--green)"></span></div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:13px;color:var(--muted)">
+            <span style="font-weight:600;color:var(--text)" id="mc-estoque-atual"></span>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Quantidade Comprada (<span id="mc-unidade-label"></span>)</label>
+                <input type="number" id="mc-qtd" placeholder="0.000" step="0.001" min="0">
+            </div>
+            <div class="form-group">
+                <label>Novo Custo por Unidade (R$)</label>
+                <input type="number" id="mc-preco" placeholder="0.00" step="0.001" min="0">
+            </div>
+            <div class="form-group form-full">
+                <label>Nova Data de Validade</label>
+                <input type="date" id="mc-validade">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="fecharModalCompra()">Cancelar</button>
+            <button class="btn-save" onclick="confirmarNovaCompra()"><i class="fas fa-cart-plus"></i> Registrar Compra</button>
+        </div>
+    </div>
+</div>
 
 <script>
 // ======= LOGO =======
@@ -1037,6 +1081,7 @@ function renderEstoque() {
             <div class="stock-bar-bg"><div class="stock-bar-fill ${barCls}" style="width:${pct}%"></div></div>
             <div class="stock-bar-label"><span>0</span><span>${fmtQtd(item.qtdMax, item.unidade)} ${item.unidade} máx.</span></div>
             <div class="stock-expiry ${exp.cls}"><i class="fas fa-calendar-alt"></i> Validade: ${formatDate(item.validade)} · ${exp.label}</div>
+            <button class="btn-compra" onclick="abrirModalCompra(${item.id})"><i class="fas fa-cart-plus"></i> Nova Compra</button>
         </div>`;
     }).join('');
 }
@@ -1080,6 +1125,62 @@ function salvarIngrediente() {
     historico.push({ id: newId + 1, produtoId: newId, nome, unidade, qtd, preco, data: hoje });
     save(); fecharModal(); renderEstoque(); popularSelect();
     showToast(`"${nome}" adicionado ao estoque!`);
+}
+
+// ======= MODAL NOVA COMPRA =======
+let compraIdAtual = null;
+
+function abrirModalCompra(id) {
+    const ing = estoque.find(i => i.id === id);
+    if (!ing) return;
+    compraIdAtual = id;
+    document.getElementById('mc-nome-titulo').textContent = ing.nome;
+    document.getElementById('mc-unidade-label').textContent = ing.unidade;
+    document.getElementById('mc-estoque-atual').textContent =
+        `Estoque atual: ${fmtQtd(ing.qtd, ing.unidade)} ${ing.unidade}  ·  Último preço: R$ ${ing.preco.toFixed(2)}/${ing.unidade}`;
+    document.getElementById('mc-preco').value = ing.preco.toFixed(2);
+    document.getElementById('mc-qtd').value = '';
+    document.getElementById('mc-validade').value = ing.validade || '';
+    document.getElementById('modal-compra-overlay').classList.add('open');
+    document.getElementById('mc-qtd').focus();
+}
+
+function fecharModalCompra() {
+    document.getElementById('modal-compra-overlay').classList.remove('open');
+    compraIdAtual = null;
+}
+
+function confirmarNovaCompra() {
+    const ing = estoque.find(i => i.id === compraIdAtual);
+    if (!ing) return;
+    const qtdNova = parseFloat(document.getElementById('mc-qtd').value);
+    const precoNovo = parseFloat(document.getElementById('mc-preco').value);
+    const validadeNova = document.getElementById('mc-validade').value;
+    if (isNaN(qtdNova) || qtdNova <= 0 || isNaN(precoNovo) || precoNovo <= 0) {
+        showToast('Preencha quantidade e custo corretamente!', true); return;
+    }
+
+    // Atualiza estoque: qtd acumulada, qtdMax = novo total, preço e validade atualizados
+    const novaQtd = ing.qtd + qtdNova;
+    ing.qtd = novaQtd;
+    ing.qtdMax = novaQtd;   // 100% = quantidade atual após a compra
+    ing.preco = precoNovo;
+    if (validadeNova) ing.validade = validadeNova;
+
+    // Registra no histórico de preços
+    const hoje = new Date().toISOString().split('T')[0];
+    historico.push({
+        id: Date.now(),
+        produtoId: ing.id,
+        nome: ing.nome,
+        unidade: ing.unidade,
+        qtd: qtdNova,
+        preco: precoNovo,
+        data: hoje
+    });
+
+    save(); fecharModalCompra(); renderEstoque(); popularSelect();
+    showToast(`✓ +${fmtQtd(qtdNova, ing.unidade)} ${ing.unidade} adicionados a "${ing.nome}"`);
 }
 
 // ======= TOAST =======
