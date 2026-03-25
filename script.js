@@ -1,5 +1,13 @@
 // --- CONFIGURAÇÃO ---
 const API_URL = 'http://localhost:3000';
+const socket = io('http://localhost:3000');
+
+// Escuta o peso vindo do Back-end (que veio do ESP32)
+socket.on('atualizarPeso', (dados) => {
+    // Substitua 'display-peso' pelo ID real do campo no HTML oficial
+    document.getElementById('display-peso').innerText = dados.peso.toFixed(3) + " kg";
+});
+
 
 // --- SISTEMA DE NAVEGAÇÃO E UI ---
 function mostrarTela(nomeTela) {

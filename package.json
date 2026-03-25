@@ -9,12 +9,13 @@
   "keywords": [],
   "author": "Gustavo, Gabriel, Lucas, Vinicius, Warley",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "pg": "^8.20.0",
+    "socket.io": "^4.8.3",
     "sqlite3": "^6.0.1"
   },
   "repository": {
@@ -24,5 +25,13 @@
   "bugs": {
     "url": "https://github.com/GuKauhan/Project_Custo_Certo/issues"
   },
-  "homepage": "https://github.com/GuKauhan/Project_Custo_Certo#readme"
+  "homepage": "https://github.com/GuKauhan/Project_Custo_Certo#readme",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "@types/socket.io": "^3.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
 }
