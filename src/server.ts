@@ -23,7 +23,7 @@ const options = {
       description: 'API para gerenciamento de ingredientes e custos',
     },
   },
-  apis: ['./src/**/*.ts'], // caminho das rotas
+  apis: ['src/routes/**/*.ts'], // caminho das rotas
 };
 
 const swaggerSpec = swaggerJsdoc(options);
