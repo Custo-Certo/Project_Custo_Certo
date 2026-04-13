@@ -104,3 +104,32 @@ socket.on('atualizarPeso', (dados) => {
     document.getElementById('display-peso').innerText =
         dados.peso.toFixed(3) + ' kg';
 });
+
+// ==============================
+// AÇÕES DE BALANÇA
+// ==============================       
+
+document.getElementById('btn-tara').addEventListener('click', async () => {
+  const res = await fetch('http://localhost:3000/balanca/tara', {
+    method: 'POST'
+  });
+
+  const data = await res.json();
+  document.getElementById('status-acao').innerText =
+    data.ok ? 'Balança tarada com sucesso' : data.erro;
+});
+
+document.getElementById('btn-confirmar').addEventListener('click', async () => {
+  const res = await fetch('http://localhost:3000/balanca/confirmar', {
+    method: 'POST'
+  });
+
+  const data = await res.json();
+
+  if (data.ok) {
+    document.getElementById('status-acao').innerText =
+      `Pesagem confirmada: ${data.pesoConfirmado.toFixed(3)} kg`;
+  } else {
+    document.getElementById('status-acao').innerText = data.erro;
+  }
+});
