@@ -4,8 +4,8 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { WebSocketServer } from 'ws';
 import ingredientesRoutes from './routes/ingredientes/ingredientesRoutes.js';
+import path from 'path';
 
-let ultimoPeso: number = 0;
 const app = express();
 const httpServer = createServer(app);
 
@@ -15,6 +15,11 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*' }
 });
+
+/* =========================
+   VARIÁVEL GLOBAL
+========================= */
+let ultimoPeso = 0;
 
 /* =========================
    MIDDLEWARES
@@ -42,20 +47,28 @@ const wss = new WebSocketServer({
   path: '/peso'
 });
 
-wss.on('connection', (ws) => {
-  console.log('ESP32 conectado via WebSocket');
+console.log('WebSocket /peso inicializado');
 
+
+wss.on('connection', (ws, req) => {
+  console.log('ESP32 conectado via WebSocket');
+  console.log('IP do ESP32:', req.socket.remoteAddress);
+
+  // ✅ AQUI É O TRECHO DA IMAGEM
   ws.on('message', (message) => {
     try {
       const dados = JSON.parse(message.toString());
 
-      console.log('Peso recebido do ESP32:', dados.peso);
+      if (typeof dados.peso === 'number') {
+        ultimoPeso = dados.peso;
 
-      // Repassa para todos os frontends
-      io.emit('atualizarPeso', dados);
+        console.log('Peso atualizado:', ultimoPeso);
 
+        // Envia ao frontend em tempo real
+        io.emit('atualizarPeso', { peso: ultimoPeso });
+      }
     } catch (err) {
-      console.error('Erro ao processar mensagem do ESP32:', err);
+      console.error('Erro ao processar mensagem do ESP32', err);
     }
   });
 
@@ -65,23 +78,11 @@ wss.on('connection', (ws) => {
 });
 
 /* =========================
-   INICIAR SERVIDOR
+   ENDPOINT: TARAR BALANÇA
 ========================= */
-httpServer.listen(3000, () => {
-  console.log('Servidor rodando em http://localhost:3000');
-});
-``
-
-// Endpoint para tarar a balança
-
 app.post('/balanca/tara', (_, res) => {
-  if (wss.clients.size === 0) {
-    return res.status(503).json({ erro: 'ESP32 não conectado' });
-  }
-
-  // Envia comando para todos os ESP32 conectados
   wss.clients.forEach((client) => {
-    if (client.readyState === 1) { // OPEN
+    if (client.readyState === 1) {
       client.send(JSON.stringify({ comando: 'tara' }));
     }
   });
@@ -89,14 +90,14 @@ app.post('/balanca/tara', (_, res) => {
   res.json({ ok: true });
 });
 
-// Endpoint para confirmar a pesagem
-
+/* =========================
+   ENDPOINT: CONFIRMAR PESAGEM
+========================= */
 app.post('/balanca/confirmar', (_, res) => {
   if (ultimoPeso <= 0) {
     return res.status(400).json({ erro: 'Peso inválido' });
   }
 
-  // Futuro: aqui você vai abater do estoque, salvar histórico etc.
   console.log('Pesagem confirmada:', ultimoPeso);
 
   res.json({
@@ -104,3 +105,12 @@ app.post('/balanca/confirmar', (_, res) => {
     pesoConfirmado: ultimoPeso
   });
 });
+
+/* =========================
+   START SERVER
+========================= */
+httpServer.listen(3000, '0.0.0.0', () => {
+  console.log('Servidor rodando em http://0.0.0.0:3000');
+});
+
+app.use(express.static(path.resolve('public')));
