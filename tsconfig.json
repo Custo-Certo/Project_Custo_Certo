@@ -12,6 +12,6 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "public/public"],
   "exclude": ["node_modules"]
 }

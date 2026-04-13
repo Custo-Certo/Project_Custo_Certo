@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { WebSocketServer } from 'ws';
 import ingredientesRoutes from './routes/ingredientes/ingredientesRoutes.js';
 import path from 'path';
 
@@ -10,7 +9,7 @@ const app = express();
 const httpServer = createServer(app);
 
 /* =========================
-   SOCKET.IO (FRONTEND)
+   SOCKET.IO (FRONT + ESP32)
 ========================= */
 const io = new Server(httpServer, {
   cors: { origin: '*' }
@@ -22,76 +21,53 @@ const io = new Server(httpServer, {
 let ultimoPeso = 0;
 
 /* =========================
-   MIDDLEWARES
+   MIDDLEWARES (ORDEM CERTA)
 ========================= */
 app.use(cors());
 app.use(express.json());
+
+// ✅ SERVE O FRONTEND (CAMINHO CORRETO)
+app.use(express.static(path.resolve(process.cwd(), 'public')));
+
+// Rotas REST
 app.use('/ingredientes', ingredientesRoutes);
 
+// ✅ Fallback explícito para /
+app.get('/', (_, res) => {
+  res.sendFile(
+    path.resolve(process.cwd(), 'public', 'index.html')
+  );
+});
+
 /* =========================
-   SOCKET.IO - FRONTEND
+   SOCKET.IO
 ========================= */
 io.on('connection', (socket) => {
-  console.log('Frontend conectado:', socket.id);
+  console.log('Cliente conectado:', socket.id);
+
+  // ESP32 envia peso
+  socket.on('peso', (dados) => {
+    if (typeof dados?.peso === 'number') {
+      ultimoPeso = dados.peso;
+      console.log('Peso recebido do ESP32:', ultimoPeso);
+
+      io.emit('atualizarPeso', { peso: ultimoPeso });
+    }
+  });
+
+  // Frontend pede tara
+  socket.on('tara', () => {
+    console.log('Comando TARA recebido');
+    io.emit('tara');
+  });
 
   socket.on('disconnect', () => {
-    console.log('Frontend desconectado:', socket.id);
+    console.log('Cliente desconectado:', socket.id);
   });
 });
 
 /* =========================
-   WEBSOCKET PURO - ESP32
-========================= */
-const wss = new WebSocketServer({
-  server: httpServer,
-  path: '/peso'
-});
-
-console.log('WebSocket /peso inicializado');
-
-
-wss.on('connection', (ws, req) => {
-  console.log('ESP32 conectado via WebSocket');
-  console.log('IP do ESP32:', req.socket.remoteAddress);
-
-  // ✅ AQUI É O TRECHO DA IMAGEM
-  ws.on('message', (message) => {
-    try {
-      const dados = JSON.parse(message.toString());
-
-      if (typeof dados.peso === 'number') {
-        ultimoPeso = dados.peso;
-
-        console.log('Peso atualizado:', ultimoPeso);
-
-        // Envia ao frontend em tempo real
-        io.emit('atualizarPeso', { peso: ultimoPeso });
-      }
-    } catch (err) {
-      console.error('Erro ao processar mensagem do ESP32', err);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('ESP32 desconectado');
-  });
-});
-
-/* =========================
-   ENDPOINT: TARAR BALANÇA
-========================= */
-app.post('/balanca/tara', (_, res) => {
-  wss.clients.forEach((client) => {
-    if (client.readyState === 1) {
-      client.send(JSON.stringify({ comando: 'tara' }));
-    }
-  });
-
-  res.json({ ok: true });
-});
-
-/* =========================
-   ENDPOINT: CONFIRMAR PESAGEM
+   CONFIRMAR PESAGEM
 ========================= */
 app.post('/balanca/confirmar', (_, res) => {
   if (ultimoPeso <= 0) {
@@ -112,5 +88,4 @@ app.post('/balanca/confirmar', (_, res) => {
 httpServer.listen(3000, '0.0.0.0', () => {
   console.log('Servidor rodando em http://0.0.0.0:3000');
 });
-
-app.use(express.static(path.resolve('public')));
+``
