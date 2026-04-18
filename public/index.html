@@ -602,20 +602,6 @@
                 </div>
             </div>
         </div>
-<div style="font-size:32px;font-weight:bold;color:#00a86b">
-  Peso atual: <span id="display-peso">0.000 kg</span>
-</div>
-
-<button id="btn-tara">Tarar balança</button>
-<button id="btn-confirmar">Confirmar pesagem</button>
-
-<div style="margin-top:20px">
-  <button id="btn-tara">Tarar balança</button>
-  <button id="btn-confirmar">Confirmar pesagem</button>
-</div>
-
-<p id="status-acao"></p>
-``
 
         <!-- ======= ESTOQUE ======= -->
         <div id="page-estoque" class="page">
@@ -981,95 +967,122 @@ function setFiltroEvolucao(val, btn) {
     renderEvolucao();
 }
 
-// ======= BALANÇA =======
-let pesoAtual = 0, pesoTara = 0, simInterval = null;
+// ======= BALANÇA (HTTP - ÚNICA FONTE DE PESO) =======
+let pesoAtual = 0;
+let intervaloPeso = null;
 
-function popularSelect() {
-    const sel = document.getElementById('select-ingrediente');
-    const val = sel.value;
-    sel.innerHTML = '<option value="">— Selecione —</option>';
-    estoque.forEach(item => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = `${item.nome} (${item.unidade})`;
-        sel.appendChild(opt);
-    });
-    if (val) sel.value = val;
-}
+// Inicia leitura do peso (UMA VEZ)
+function iniciarLeituraPeso() {
+  if (intervaloPeso) return;
 
-function iniciarSimulacao() {
-    if (simInterval) clearInterval(simInterval);
-    let base = Math.random() * 0.8 + 0.1;
-    simInterval = setInterval(() => {
-        let noise = (Math.random() - 0.5) * 0.004;
-        pesoAtual = Math.max(0, base + noise - pesoTara);
+  intervaloPeso = setInterval(async () => {
+    try {
+      const res = await fetch('/balanca/peso');
+      const data = await res.json();
+
+      if (typeof data.peso === 'number') {
+        pesoAtual = data.peso;
         atualizarDisplay();
-    }, 300);
-}
-iniciarSimulacao();
-
-function atualizarDisplay() {
-    const ing = getIngredienteSelecionado();
-    let peso = Math.max(0, pesoAtual);
-    let displayVal, displayUnit;
-    if (!ing) { displayVal = peso.toFixed(3); displayUnit = 'kg'; }
-    else if (ing.unidade === 'g') { displayVal = (peso * 1000).toFixed(1); displayUnit = 'g'; }
-    else if (ing.unidade === 'L') { displayVal = peso.toFixed(3); displayUnit = 'L'; }
-    else if (ing.unidade === 'ml') { displayVal = (peso * 1000).toFixed(0); displayUnit = 'ml'; }
-    else if (ing.unidade === 'un') { displayVal = Math.round(peso * 10).toString(); displayUnit = 'un'; }
-    else { displayVal = peso.toFixed(3); displayUnit = 'kg'; }
-    document.getElementById('peso-display').textContent = displayVal;
-    document.getElementById('unidade-display').textContent = displayUnit;
-    document.getElementById('btn-confirmar').disabled = !(ing && peso > 0.001);
-    if (ing) atualizarTabelaCusto(ing, peso);
-}
-
-function getIngredienteSelecionado() {
-    const id = parseInt(document.getElementById('select-ingrediente').value);
-    return estoque.find(i => i.id === id) || null;
-}
-function onIngredientChange() { atualizarDisplay(); }
-function tararBalanca() { pesoTara += pesoAtual; pesoAtual = 0; showToast('Balança tarada!'); }
-
-function confirmarPeso() {
-    const ing = getIngredienteSelecionado();
-    if (!ing || pesoAtual <= 0.001) return;
-    let consumo = pesoAtual;
-    if (ing.unidade === 'g') consumo = pesoAtual * 1000;
-    if (ing.unidade === 'ml') consumo = pesoAtual * 1000;
-    if (consumo > ing.qtd) { showToast('⚠ Estoque insuficiente!', true); return; }
-    ing.qtd = Math.max(0, ing.qtd - consumo);
-    save();
-    const val = (pesoAtual * ing.preco).toFixed(2);
-    showToast(`✓ ${consumo.toFixed(2)} ${ing.unidade} descontados · R$ ${val}`);
-    pesoTara = 0;
-}
-
-function atualizarTabelaCusto(ing, peso) {
-    const pesoKg = peso;
-    const pesoG = peso * 1000;
-    const valor = peso * ing.preco;
-    let rows = '';
-    if (ing.unidade === 'kg' || ing.unidade === 'g') {
-        rows = `
-            <tr><td>Por grama</td><td>${pesoG.toFixed(1)} g</td><td class="val-col">R$ ${(ing.preco/1000*pesoG).toFixed(4)}</td></tr>
-            <tr><td>Por 100g</td><td>${(pesoG/100).toFixed(2)} ×</td><td class="val-col">R$ ${(ing.preco/10*pesoG/100).toFixed(3)}</td></tr>
-            <tr><td>Por kg</td><td>${pesoKg.toFixed(3)} kg</td><td class="val-col">R$ ${(ing.preco*pesoKg).toFixed(4)}</td></tr>
-            <tr class="highlight-row"><td><strong>💡 Porção pesada</strong></td><td><strong>${ing.unidade==='g'?pesoG.toFixed(1)+' g':pesoKg.toFixed(3)+' kg'}</strong></td><td class="val-col"><strong>R$ ${valor.toFixed(2)}</strong></td></tr>`;
-    } else if (ing.unidade === 'L' || ing.unidade === 'ml') {
-        const ml = pesoKg * 1000;
-        rows = `
-            <tr><td>Por ml</td><td>${ml.toFixed(0)} ml</td><td class="val-col">R$ ${(ing.preco/1000*ml).toFixed(4)}</td></tr>
-            <tr><td>Por 100ml</td><td>${(ml/100).toFixed(1)} ×</td><td class="val-col">R$ ${(ing.preco/10*ml/100).toFixed(3)}</td></tr>
-            <tr class="highlight-row"><td><strong>💡 Porção pesada</strong></td><td><strong>${ing.unidade==='ml'?ml.toFixed(0)+' ml':pesoKg.toFixed(3)+' L'}</strong></td><td class="val-col"><strong>R$ ${valor.toFixed(2)}</strong></td></tr>`;
-    } else {
-        const un = Math.round(pesoKg * 10);
-        rows = `
-            <tr><td>Por unidade</td><td>${un} un</td><td class="val-col">R$ ${(ing.preco*un).toFixed(2)}</td></tr>
-            <tr class="highlight-row"><td><strong>💡 Porção pesada</strong></td><td><strong>${un} unidades</strong></td><td class="val-col"><strong>R$ ${(ing.preco*un).toFixed(2)}</strong></td></tr>`;
+      }
+    } catch (err) {
+      console.error('Erro ao buscar peso:', err);
     }
-    rows += `<tr><td colspan="3" style="font-size:11px;color:var(--muted);padding-top:6px">Custo base: R$ ${ing.preco.toFixed(2)} / ${ing.unidade}</td></tr>`;
-    document.getElementById('custo-tbody').innerHTML = rows;
+  }, 500);
+}
+
+// Retorna ingrediente selecionado
+function getIngredienteSelecionado() {
+  const id = Number(document.getElementById('select-ingrediente').value);
+  return estoque.find(i => i.id === id) || null;
+}
+
+// Atualiza display da balança (✅ ESSENCIAL)
+function atualizarDisplay() {
+  const ing = getIngredienteSelecionado();
+  let peso = Math.max(0, pesoAtual);
+  let valor = peso.toFixed(3);
+  let unidade = 'kg';
+
+  if (ing) {
+    if (ing.unidade === 'g') {
+      valor = (peso * 1000).toFixed(1);
+      unidade = 'g';
+    } else if (ing.unidade === 'ml') {
+      valor = (peso * 1000).toFixed(0);
+      unidade = 'ml';
+    } else if (ing.unidade === 'un') {
+      valor = Math.round(peso * 10);
+      unidade = 'un';
+    } else {
+      unidade = ing.unidade;
+    }
+  }
+
+  document.getElementById('peso-display').textContent = valor;
+  document.getElementById('unidade-display').textContent = unidade;
+
+  document.getElementById('btn-confirmar').disabled =
+    !(ing && peso > 0.001);
+
+  if (ing) atualizarTabelaCusto(ing, peso);
+}
+
+// Select de ingredientes
+function popularSelect() {
+  iniciarLeituraPeso();
+
+  const sel = document.getElementById('select-ingrediente');
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">— Selecione —</option>';
+
+  estoque.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.id;
+    opt.textContent = `${item.nome} (${item.unidade})`;
+    sel.appendChild(opt);
+  });
+
+  if (atual) sel.value = atual;
+  atualizarDisplay();
+}
+
+function onIngredientChange() {
+  atualizarDisplay();
+}
+
+// Tara
+async function tararBalanca() {
+  await fetch('/balanca/tara', { method: 'POST' });
+  showToast('Balança tarada');
+}
+
+// Confirmar peso
+async function confirmarPeso() {
+  const ing = getIngredienteSelecionado();
+  if (!ing || pesoAtual <= 0.001) return;
+
+  let consumo = pesoAtual;
+  if (ing.unidade === 'g' || ing.unidade === 'ml') {
+    consumo = pesoAtual * 1000;
+  }
+
+  if (consumo > ing.qtd) {
+    showToast('⚠ Estoque insuficiente!', true);
+    return;
+  }
+
+  const res = await fetch('/balanca/confirmar', { method: 'POST' });
+  const data = await res.json();
+
+  if (!data.ok) {
+    showToast(data.erro, true);
+    return;
+  }
+
+  ing.qtd = Math.max(0, ing.qtd - consumo);
+  save();
+
+  showToast(`✓ ${consumo.toFixed(3)} ${ing.unidade} abatidos`);
 }
 
 // ======= ESTOQUE =======
@@ -1215,9 +1228,7 @@ function showToast(msg, err = false) {
 popularSelect();
 </script>
 
-<!-- Socket.IO -->
-<script src="http://localhost:3000/socket.io/socket.io script principal -->
-script.js</script>
+
 
 </body>
 

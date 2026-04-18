@@ -1,135 +1,73 @@
 const API_URL = 'http://localhost:3000';
 
 let estoque = [];
+let pesoAtual = 0;
 
 // ==============================
-// CARREGAR ESTOQUE (READ)
+// ESTOQUE
 // ==============================
 async function carregarEstoque() {
-    const res = await fetch(`${API_URL}/ingredientes`);
-    estoque = await res.json();
-    renderEstoque();
+  const res = await fetch(`${API_URL}/ingredientes`);
+  estoque = await res.json();
+  renderEstoque();
 }
 
-// ==============================
-// RENDER ESTOQUE (UI)
-// ==============================
 function renderEstoque() {
-    const corpo = document.getElementById('tabela-corpo');
-    corpo.innerHTML = '';
+  const corpo = document.getElementById('tabela-corpo');
+  corpo.innerHTML = '';
 
-    if (!estoque.length) {
-        corpo.innerHTML = `
-            <tr>
-                <td colspan="6" style="text-align:center;color:#7f8c8d;padding:40px">
-                    Nenhum ingrediente cadastrado
-                </td>
-            </tr>
-        `;
-        return;
-    }
+  estoque.forEach(item => {
+    corpo.innerHTML += `
+      <tr>
+        <td>${item.nome}</td>
+        <td>R$ ${item.preco.toFixed(2)}</td>
+        <td>${item.estoqueAtual.toFixed(3)} ${item.unidade}</td>
+        <td>${item.estoqueMinimo.toFixed(3)} ${item.unidade}</td>
+        <td>
+          <button onclick="deletarIngrediente(${item.id})">Excluir</button>
+        </td>
+      </tr>
+    `;
+  });
+}
 
-    estoque.forEach(item => {
-        const precisaRepor = item.estoqueAtual < item.estoqueMinimo;
-
-        corpo.innerHTML += `
-            <tr>
-                <td>${item.nome}</td>
-                <td>R$ ${item.preco.toFixed(2)}</td>
-                <td>${item.estoqueAtual.toFixed(3)} ${item.unidade}</td>
-                <td>${item.estoqueMinimo.toFixed(3)} ${item.unidade}</td>
-                <td style="color:${precisaRepor ? '#e74c3c' : '#2ecc71'}">
-                    ${precisaRepor ? 'Repor' : 'OK'}
-                </td>
-                <td>
-                    <button onclick="deletarIngrediente(${item.id})">
-                        Excluir
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
+async function deletarIngrediente(id) {
+  await fetch(`${API_URL}/ingredientes/${id}`, { method: 'DELETE' });
+  carregarEstoque();
 }
 
 // ==============================
-// CADASTRAR (CREATE)
+// BALANÇA (PESO AO VIVO)
 // ==============================
-document.getElementById('form-cadastro').addEventListener('submit', async (e) => {
-    e.preventDefault();
+setInterval(async () => {
+  const res = await fetch(`${API_URL}/balanca/peso`);
+  const data = await res.json();
 
-    const ingrediente = {
-        nome: document.getElementById('nome').value,
-        unidade: document.getElementById('unidade').value,
-        preco: Number(document.getElementById('preco').value),
-        estoqueAtual: Number(document.getElementById('estoqueAtual').value),
-        estoqueMinimo: Number(document.getElementById('estoqueMinimo').value)
-    };
+  if (typeof data.peso === 'number') {
+    pesoAtual = data.peso;
+    document.getElementById('display-peso').innerText =
+      pesoAtual.toFixed(3) + ' kg';
+  }
+}, 500);
 
-    await fetch(`${API_URL}/ingredientes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ingrediente)
-    });
-
-    e.target.reset();
-    carregarEstoque();
+// ==============================
+// AÇÕES
+// ==============================
+document.getElementById('btn-tara').addEventListener('click', async () => {
+  await fetch(`${API_URL}/balanca/tara`, { method: 'POST' });
 });
 
-// ==============================
-// DELETAR (DELETE)
-// ==============================
-async function deletarIngrediente(id) {
-    const ok = confirm('Deseja excluir este ingrediente?');
-    if (!ok) return;
+document.getElementById('btn-confirmar').addEventListener('click', async () => {
+  const res = await fetch(`${API_URL}/balanca/confirmar`, { method: 'POST' });
+  const data = await res.json();
 
-    await fetch(`${API_URL}/ingredientes/${id}`, {
-        method: 'DELETE'
-    });
-
-    carregarEstoque();
-}
+  document.getElementById('status-acao').innerText =
+    data.ok
+      ? `Pesagem confirmada: ${data.pesoConfirmado.toFixed(3)} kg`
+      : data.erro;
+});
 
 // ==============================
 // INIT
 // ==============================
 carregarEstoque();
-
-// =============================
-// SOCKET.IO - ATUALIZAÇÃO DE PESO
-// ==============================
-
-const socket = io('http://localhost:3000');
-
-socket.on('atualizarPeso', (dados) => {
-    document.getElementById('display-peso').innerText =
-        dados.peso.toFixed(3) + ' kg';
-});
-
-// ==============================
-// AÇÕES DE BALANÇA
-// ==============================       
-
-document.getElementById('btn-tara').addEventListener('click', async () => {
-  const res = await fetch('http://localhost:3000/balanca/tara', {
-    method: 'POST'
-  });
-
-  const data = await res.json();
-  document.getElementById('status-acao').innerText =
-    data.ok ? 'Balança tarada com sucesso' : data.erro;
-});
-
-document.getElementById('btn-confirmar').addEventListener('click', async () => {
-  const res = await fetch('http://localhost:3000/balanca/confirmar', {
-    method: 'POST'
-  });
-
-  const data = await res.json();
-
-  if (data.ok) {
-    document.getElementById('status-acao').innerText =
-      `Pesagem confirmada: ${data.pesoConfirmado.toFixed(3)} kg`;
-  } else {
-    document.getElementById('status-acao').innerText = data.erro;
-  }
-});
