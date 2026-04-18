@@ -1,80 +1,64 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import ingredientesRoutes from './routes/ingredientes/ingredientesRoutes.js';
 import path from 'path';
+import ingredientesRoutes from './routes/ingredientes/ingredientesRoutes.js';
 
 const app = express();
-const httpServer = createServer(app);
 
 /* =========================
-   SOCKET.IO (FRONT + ESP32)
-========================= */
-const io = new Server(httpServer, {
-  cors: { origin: '*' }
-});
-
-/* =========================
-   VARIÁVEL GLOBAL
+   ESTADO GLOBAL DA BALANÇA
 ========================= */
 let ultimoPeso = 0;
+let precisaTarar = false;
 
 /* =========================
-   MIDDLEWARES (ORDEM CERTA)
+   MIDDLEWARES
 ========================= */
 app.use(cors());
 app.use(express.json());
-
-// ✅ SERVE O FRONTEND (CAMINHO CORRETO)
 app.use(express.static(path.resolve(process.cwd(), 'public')));
 
-// Rotas REST
+/* =========================
+   ROTAS DE INGREDIENTES
+========================= */
 app.use('/ingredientes', ingredientesRoutes);
 
-// ✅ Fallback explícito para /
-app.get('/', (_, res) => {
-  res.sendFile(
-    path.resolve(process.cwd(), 'public', 'index.html')
-  );
+/* =========================
+   BALANÇA (HTTP)
+========================= */
+
+// ESP32 envia peso
+app.post('/balanca/peso', (req, res) => {
+  const { peso } = req.body;
+  if (typeof peso === 'number') {
+    ultimoPeso = peso;
+    console.log('⚖️ Peso recebido:', ultimoPeso);
+  }
+  res.json({ ok: true });
 });
 
-/* =========================
-   SOCKET.IO
-========================= */
-io.on('connection', (socket) => {
-  console.log('Cliente conectado:', socket.id);
-
-  // ESP32 envia peso
-  socket.on('peso', (dados) => {
-    if (typeof dados?.peso === 'number') {
-      ultimoPeso = dados.peso;
-      console.log('Peso recebido do ESP32:', ultimoPeso);
-
-      io.emit('atualizarPeso', { peso: ultimoPeso });
-    }
-  });
-
-  // Frontend pede tara
-  socket.on('tara', () => {
-    console.log('Comando TARA recebido');
-    io.emit('tara');
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Cliente desconectado:', socket.id);
-  });
+// Frontend lê peso
+app.get('/balanca/peso', (_, res) => {
+  res.json({ peso: ultimoPeso });
 });
 
-/* =========================
-   CONFIRMAR PESAGEM
-========================= */
+// Frontend pede tara
+app.post('/balanca/tara', (_, res) => {
+  precisaTarar = true;
+  res.json({ ok: true });
+});
+
+// ESP32 verifica tara
+app.get('/balanca/tara', (_, res) => {
+  res.json({ tarar: precisaTarar });
+  precisaTarar = false;
+});
+
+// Confirmar pesagem
 app.post('/balanca/confirmar', (_, res) => {
   if (ultimoPeso <= 0) {
     return res.status(400).json({ erro: 'Peso inválido' });
   }
-
-  console.log('Pesagem confirmada:', ultimoPeso);
 
   res.json({
     ok: true,
@@ -83,9 +67,15 @@ app.post('/balanca/confirmar', (_, res) => {
 });
 
 /* =========================
-   START SERVER
+   FRONTEND
 ========================= */
-httpServer.listen(3000, '0.0.0.0', () => {
-  console.log('Servidor rodando em http://0.0.0.0:3000');
+app.get('/', (_, res) => {
+  res.sendFile(path.resolve(process.cwd(), 'public', 'index.html'));
 });
-``
+
+/* =========================
+   START
+========================= */
+app.listen(3000, '0.0.0.0', () => {
+  console.log('🚀 Servidor rodando em http://0.0.0.0:3000');
+});
