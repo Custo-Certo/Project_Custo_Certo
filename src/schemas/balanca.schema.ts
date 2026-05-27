@@ -1,86 +1,62 @@
 /**
- * "Repository" de pesagem.
- *
- * O estado da balança (peso atual + flag de tara) é volátil por design:
- * - Atualizado várias vezes por segundo pelo ESP32 — persistir no DB
- *   seria desperdício e geraria carga inútil em Turso.
- * - Quando o servidor reinicia, a balança zera junto. Comportamento desejado.
- *
- * Mantemos um repository mesmo assim para preservar a separação de camadas:
- * o service e o controller não sabem onde o estado vive.
- *
- * O padrão de listeners permite que a camada de serviço registre callbacks
- * que são acionados a cada nova leitura do ESP32 — base do push via SSE.
+ * Validação dos payloads vindos da balança (ESP32) e do frontend.
  */
 
-import type { BalancaState } from '../models/pesagem.model.js';
+import { AppError } from '../errors/app-error.js';
 
-const state: BalancaState = {
-  pesoAtual: 0,
-  precisaTarar: false,
-  ultimaAtualizacao: 0,
-};
-
-/** Snapshot enviado aos listeners a cada nova leitura */
-export interface PesoSnapshot {
+interface PesoPayload {
   peso: number;
-  online: boolean;
-  ultimaAtualizacao: number;
 }
 
-type PesoListener = (snapshot: PesoSnapshot) => void;
+/**
+ * Valida POST /balanca/peso (ESP32 enviando peso medido).
+ * O ESP32 manda { peso: number } a cada loop.
+ */
+export function validatePesoPayload(body: unknown): PesoPayload {
+  if (!body || typeof body !== 'object') {
+    throw new AppError('Payload inválido', 400);
+  }
 
-const listeners = new Set<PesoListener>();
+  const b = body as Record<string, unknown>;
+  const peso = Number(b.peso);
 
-export const pesagemRepository = {
-  /** Lê o estado completo */
-  getState(): Readonly<BalancaState> {
-    return { ...state };
-  },
+  if (!Number.isFinite(peso)) {
+    throw new AppError('Campo "peso" deve ser numérico', 400);
+  }
 
-  /** ESP32 atualiza o peso e notifica listeners SSE */
-  setPeso(peso: number): void {
-    state.pesoAtual = peso;
-    state.ultimaAtualizacao = Date.now();
+  // ESP32 às vezes manda valores absurdos quando descalibrado. Limitar é defensivo.
+  if (peso < -100 || peso > 1000) {
+    throw new AppError('Peso fora do intervalo aceito (-100 a 1000 kg)', 400);
+  }
 
-    const snapshot: PesoSnapshot = {
-      peso: state.pesoAtual,
-      online: true, // acabou de receber leitura — definitivamente online
-      ultimaAtualizacao: state.ultimaAtualizacao,
-    };
-    listeners.forEach((fn) => {
-      try { fn(snapshot); } catch { /* cliente desconectado; será limpo via req.close */ }
-    });
-  },
+  return { peso };
+}
 
-  /**
-   * Registra um listener SSE. Retorna função de cleanup para usar em req.on('close').
-   */
-  addListener(fn: PesoListener): () => void {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  },
+interface ConfirmarPayload {
+  ingredienteId: number;
+  quantidadeConsumida: number;  // já convertida para a unidade do ingrediente
+}
 
-  /** Quantidade de clientes SSE conectados (útil para debug/health) */
-  sseClientCount(): number {
-    return listeners.size;
-  },
+/**
+ * Valida POST /balanca/confirmar — vem do frontend ao bater "Confirmar pesagem".
+ * Recebe qual ingrediente e quanto vai abater do estoque.
+ */
+export function validateConfirmarPayload(body: unknown): ConfirmarPayload {
+  if (!body || typeof body !== 'object') {
+    throw new AppError('Payload inválido', 400);
+  }
 
-  /** Frontend pede tara */
-  solicitarTara(): void {
-    state.precisaTarar = true;
-  },
+  const b = body as Record<string, unknown>;
 
-  /** ESP32 consome a flag de tara (read-and-clear) */
-  consumirTara(): boolean {
-    const precisava = state.precisaTarar;
-    state.precisaTarar = false;
-    return precisava;
-  },
+  const ingredienteId = Number(b.ingredienteId);
+  if (!Number.isInteger(ingredienteId) || ingredienteId <= 0) {
+    throw new AppError('Campo "ingredienteId" inválido', 400);
+  }
 
-  /** Indica se a balança recebeu leitura recente (< 5s) */
-  estaOnline(): boolean {
-    if (state.ultimaAtualizacao === 0) return false;
-    return Date.now() - state.ultimaAtualizacao < 5000;
-  },
-};
+  const quantidadeConsumida = Number(b.quantidadeConsumida);
+  if (!Number.isFinite(quantidadeConsumida) || quantidadeConsumida <= 0) {
+    throw new AppError('Campo "quantidadeConsumida" deve ser > 0', 400);
+  }
+
+  return { ingredienteId, quantidadeConsumida };
+}

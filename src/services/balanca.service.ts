@@ -9,7 +9,7 @@
 import { pesagemRepository } from '../repositories/pesagem.repo.js';
 import type { PesoSnapshot } from '../repositories/pesagem.repo.js';
 import { ingredienteService } from './ingrediente.service.js';
-import { AppError } from '../errors/app-errors.js';
+import { AppError } from '../errors/app-error.js';
 import type {
   BalancaState,
   ConfirmacaoPesagem,
