@@ -11,7 +11,7 @@
     "url": "git+https://github.com/GuKauhan/Project_Custo_Certo.git"
   },
   "license": "ISC",
-  "author": "Lucas T. Strinta, Gustavo Kauhan, Gabriel Marchezoni, Vinicius Sterza, Warley Alves",
+  "author": "Lucas T Strinta, Gustavo Kauhan, Gabriel Marchezoni, Vinicius Sterza, Warley Alves",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
