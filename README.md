@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./.github/banner.svg" alt="Custo Certo" width="440"/>
+<img src="./.github/banner.svg" alt="Custo Certo" width="320"/>
 
 ### Gestão inteligente de estoque e custos
 
@@ -35,7 +35,7 @@
 
 ## 📖 Sobre o Projeto
 
-**Custo Certo** é o Trabalho de Conclusão de Curso (TCC / Projeto Integrador) desenvolvido na **FATEC Indaiatuba**. O sistema nasceu de um problema real de uma cafeteria: a dificuldade de controlar o consumo de insumos e calcular com precisão o **CMV (Custo de Mercadoria Vendida)**.
+Trabalho desenvolvido dentro do Projeto Integrador do curso de Análise e Desenvolvimento de Sistemas da **FATEC Indaiatuba**. O sistema **Custo Certo** nasceu de um problema real de uma cafeteria: a dificuldade de controlar o consumo de insumos e calcular com precisão o **CMV (Custo de Mercadoria Vendida)**.
 
 A solução combina **hardware e software** em um fluxo único:
 
@@ -59,7 +59,7 @@ A solução combina **hardware e software** em um fluxo único:
 ## ✨ Funcionalidades
 
 - 📦 **CRUD completo de insumos** — cadastro, edição, consulta e remoção de ingredientes com unidade, preço, quantidade e validade.
-- ⚖️ **Pesagem em tempo real** — leitura contínua da balança via **Server-Sent Events (SSE)**, com push instantâneo para o navegador.
+- ⚖️ **Pesagem em tempo real** — leitura contínua da balança via **Server-Sent Events (SSE)**, com push para o navegador.
 - 🔄 **Movimentações de estoque** — registro de entradas (compras) e saídas (consumo), cada uma com data e preço unitário.
 - 📊 **Dashboards interativos** — gráficos de composição de estoque, status, CMV e evolução de preços (Chart.js).
 - 🗓️ **Alertas de validade (FIFO)** — destaque de lotes próximos do vencimento e baixa pelo lote mais antigo.
@@ -109,7 +109,7 @@ Rotas → Controllers → Services → Repositories → Banco de Dados
 | **Backend** | Node.js · TypeScript · Express 5 · Zod |
 | **Banco de Dados** | SQLite (local) · Turso (cloud) |
 | **Frontend** | HTML5 · CSS3 · JavaScript (vanilla) · Chart.js |
-| **Hardware** | ESP32 · Célula de carga HX711 · Arduino Framework |
+| **Hardware** | ESP32 · Célula de carga · HX711 · Arduino Framework |
 | **IoT / Build** | PlatformIO |
 | **Docs / Testes** | Swagger (OpenAPI) · Cypress (E2E) |
 | **Deploy** | Render (servidor) · Turso (banco em nuvem) |
@@ -340,6 +340,7 @@ turso db tokens create custo-certo     # copie o DB_AUTH_TOKEN
 - [ ] Refatoração para **WebSockets** (substituir polling do ESP32)
 - [ ] CRUD completo de **Receitas** com cálculo de CMV
 - [ ] Acesso mobile
+- [ ] 'And loading'...
 
 ---
 
